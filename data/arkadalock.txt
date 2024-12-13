@@ -16,8 +16,8 @@ pin_code = ""
 pin_input = ""
 attempts = 0
 max_attempts = 3
-admin_telegram_id = 5221256818  # Телеграм ID для отправки пин-кода
-bot_token = "7302717410:AAH9jS4nlGzFurLr-px-wgvkxI8Pu9Tth54"
+admin_telegram_id = {id}  # Телеграм ID для отправки пин-кода
+bot_token = "token"
 login_success = False
 running = True
 
