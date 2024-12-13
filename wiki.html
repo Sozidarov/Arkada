@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wiki - Arkada</title>
+    <style>
+        body {
+            font-family: Arial, Proxima Nova;
+            margin: 0;
+            background-color: #fff;
+            color: #333;
+        }
+
+        .navbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 20px;
+            background-color: #333;
+            color: #fff;
+        }
+
+        .navbar .brand {
+            font-size: 24px;
+            font-weight: regular;
+        }
+
+        .navbar .menu a {
+            margin-left: 20px;
+            text-decoration: none;
+            color: #fff;
+            transition: color 0.3s;
+        }
+
+        .navbar .menu a:hover {
+            color: #ff4d4d;
+        }
+
+        .container {
+            display: flex;
+            padding: 20px;
+        }
+
+        .sidebar {
+            width: 250px;
+            margin-right: 20px;
+        }
+
+        .sidebar a {
+            display: block;
+            padding: 10px;
+            background-color: #f4f4f4;
+            margin-bottom: 10px;
+            text-decoration: none;
+            color: #333;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+        }
+
+        .sidebar a:hover {
+            background-color: #ff4d4d;
+            color: #fff;
+        }
+
+        .content-box {
+            flex-grow: 1;
+            background-color: #fff;
+            color: #333;
+            padding: 20px;
+            border-radius: 10px;
+            height: 400px;
+            overflow-y: auto;
+        }
+
+        .code-box {
+            background-color: #222;
+            color: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            margin-top: 10px;
+        }
+
+        .code-box pre {
+            background-color: #222;
+            padding: 10px;
+            border-radius: 8px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .syntax-keyword {
+            color: red;
+        }
+
+        .syntax-string {
+            color: green;
+        }
+
+        .syntax-function {
+            color: #f0a;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="navbar">
+        <div class="brand">Arkada</div>
+        <div class="menu">
+            <a href="index.html">Главная</a>
+            <a href="https://example.com">Продукты</a>
+            <a href="wiki.html">Wiki</a>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="sidebar">
+            <a href="#" class="api-link">API</a>
+            <div class="content" id="api-content" style="display: none;">
+                <a href="#" class="api-item" data-api="arkadatool">ArkadaTool</a>
+                <a href="#" class="api-item" data-api="arkadarat">ArkadaRAT</a>
+                <a href="#" class="api-item" data-api="arkadalock">ArkadaLOCK</a>
+                <a href="#" class="api-item" data-api="sputnik">SPUTNIK</a>
+            </div>
+
+            <a href="#" class="code-link">Code</a>
+            <div class="content" id="code-content" style="display: none;">
+                <a href="#" class="code-item" data-code="arkadatool">ArkadaTool</a>
+                <a href="#" class="code-item" data-code="arkadarat">ArkadaRAT</a>
+                <a href="#" class="code-item" data-code="arkadalock">ArkadaLOCK</a>
+                <a href="#" class="code-item" data-code="sputnik">SPUTNIK</a>
+            </div>
+        </div>
+
+        <div class="content-box" id="content-display">
+            <!-- Здесь будет отображаться API или код -->
+        </div>
+    </div>
+
+    <script>
+        // Скрывать и показывать блоки для API и Code
+        document.querySelector('.api-link').addEventListener('click', function() {
+            // Показываем блок API
+            document.getElementById('api-content').style.display = 'block';
+            document.getElementById('code-content').style.display = 'none';
+        });
+
+        document.querySelector('.code-link').addEventListener('click', function() {
+            // Показываем блок Code
+            document.getElementById('code-content').style.display = 'block';
+            document.getElementById('api-content').style.display = 'none';
+        });
+
+        // Обработчик для выбора API
+        document.querySelectorAll('.api-item').forEach(item => {
+            item.addEventListener('click', function(e) {
+                e.preventDefault();
+                const apiType = this.getAttribute('data-api');
+                const contentDisplay = document.getElementById('content-display');
+                const apiDescriptions = {
+                    arkadatool: `В API ArkadaTool использовался сервис dadata<br>благодаря ему в Arkada New был поиск по паспорту. API полностью бесплатный<br>и ключ а также api были оставлены<br>в одной из версий.`,
+                    arkadarat: `API был только у ipinfo.io, для вывода IP адреса через Telegram Bots`,
+                    arkadalock: `API был только у ipinfo.io, для вывода IP адреса через Telegram Bots`,
+                    sputnik: `None.`
+                };
+
+                contentDisplay.innerHTML = `<h2>${apiDescriptions[apiType]}</h2>`;
+            });
+        });
+
+        // Обработчик для выбора кода
+        document.querySelectorAll('.code-item').forEach(item => {
+            item.addEventListener('click', function(e) {
+                e.preventDefault();
+                const codeType = this.getAttribute('data-code');
+                const contentDisplay = document.getElementById('content-display');
+                const txtFiles = {
+                    arkadatool: 'data/arkadatool.txt',
+                    arkadarat: 'data/arkadarat.txt',
+                    arkadalock: 'data/arkadalock.txt',
+                    sputnik: 'data/sputnik.txt'
+                };
+
+                // Загружаем код из текстового файла
+                fetch(txtFiles[codeType])
+                    .then(response => response.text())  // Заменяем .json() на .text()
+                    .then(data => {
+                        contentDisplay.innerHTML = `<div class="code-box"><pre><code class="python">${highlightCode(data)}</code></pre></div>`;
+                    })
+                    .catch(error => {
+                        contentDisplay.innerHTML = `<p>Ошибка при загрузке кода: ${error}</p>`;
+                    });
+            });
+        });
+
+        // Функция для подсветки синтаксиса кода
+        function highlightCode(code) {
+            return code.replace(/\b(import|def|print)\b/g, '<span class="syntax-keyword">$1</span>')
+                        .replace(/"(.*?)"/g, '<span class="syntax-string">"$1"</span>');
+        }
+    </script>
+
+</body>
+</html>

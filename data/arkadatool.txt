@@ -1,0 +1,299 @@
+{
+    "code": """
+import pandas as pd\nimport csv
+import os
+import sqlite3
+from pystyle import Write, Colors, Center, Box
+import platform
+import requests
+import json
+import psutil
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import socket
+from bs4 import BeautifulSoup
+from ipwhois import IPWhois
+import speedtest
+from datetime import datetime
+
+def get_os():
+    return f"{platform.system()} {platform.release()}"
+
+# Функция для загрузки файлов из папки DataBase
+def get_files_from_folder(base_folder, extension_filter=None):
+    file_paths = []
+    for root, dirs, files in os.walk(base_folder):
+        for file in files:
+            if extension_filter:
+                if any(file.endswith(ext) for ext in extension_filter):
+                    file_paths.append(os.path.join(root, file))
+            else:
+                file_paths.append(os.path.join(root, file))
+    return file_paths
+
+# Функция для поиска данных
+def load_and_search(file_paths, value):
+    found_in_any = False
+    cached_data = {}
+
+    for file_path in file_paths:
+        try:
+            if file_path not in cached_data:
+                if file_path.endswith('.xlsx'):
+                    cached_data[file_path] = pd.read_excel(file_path, header=None)
+                elif file_path.endswith('.csv'):
+                    with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
+                        try:
+                            cached_data[file_path] = pd.read_csv(f, header=None, delimiter=',', on_bad_lines='skip', low_memory=False)
+                        except pd.errors.ParserError:
+                            f.seek(0)
+                            cached_data[file_path] = pd.read_csv(f, header=None, delimiter=';')
+                elif file_path.endswith('.txt'):
+                    with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
+                        content = f.readlines()
+                    cached_data[file_path] = pd.DataFrame(content, columns=['Data'])
+                elif file_path.endswith('.json'):
+                    with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
+                        json_data = json.load(f)
+                    if isinstance(json_data, dict):
+                        cached_data[file_path] = pd.json_normalize(json_data)
+                    else:
+                        cached_data[file_path] = pd.DataFrame(json_data)
+                else:
+                    continue
+
+            df = cached_data[file_path]
+            df_str = df.astype(str)
+
+            found_in_file = False
+            for index, row in df_str.iterrows():
+                if row.str.contains(value, na=False, regex=False).any():
+                    found_in_file = True
+                    found_in_any = True
+                    Write.Print(f"[+] Найдено в базе > {file_path}\n", Colors.red, interval=0.0)
+                    print(" ")
+                    Write.Print(row.to_list(), Colors.red, interval=0.0)
+                    print(" ")
+                    Write.Print("〖 ARKADA 〗", Colors.red, interval=0.0)
+                    print(" ")
+
+            if not found_in_file:
+                Write.Print(f"[-] Не найдено в базе > {file_path}\n", Colors.red, interval=0.0)
+
+        except Exception as e:
+            Write.Print(f"[!] Ошибка при обработке файла '{file_path}': {str(e)}", Colors.red, interval=0.0)
+
+    if not found_in_any:
+        Write.Print(f"[/] Запрос '{value}' не был найден в базах=(", Colors.red, interval=0.0)
+
+'''
+WEB
+'''
+def check_ip():
+    ip = Write.Input(f"Enter IP:", Colors.red_to_purple, interval=0.0)
+    try:
+        obj = IPWhois(ip)
+        results = obj.lookup_rdap()
+        Write.Print(f"\nProvider: {results.get('network', {}).get('name', 'Unknown')}", Colors.red_to_purple, interval=0.0)
+        Write.Print(f"\nCountry: {results.get('asn_country_code', 'Unknown')}", Colors.red_to_purple, interval=0.0)
+        Write.Print(f"\nCity: {results.get('city', 'Unknown')}", Colors.red_to_purple, interval=0.0)
+    except Exception as e:
+        Write.Print(f"Error: {e}", Colors.red, interval=0.0)
+
+def check_site_availability():
+    url = Write.Input("Enter site URL: ", Colors.red_to_purple, interval=0.0)
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36"
+    }
+    try:
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            Write.Print(f"Sait {url} available.", Colors.red_to_purple, interval=0.0)
+        else:
+            Write.Print(f"Sait unavailable {url} Status: {response.status_code}", Colors.red, interval=0.0)
+    except Exception as e:
+        Write.Print(f"Error: {e}", Colors.red, interval=0.0)
+
+def parse_website():
+    url = Write.Input("URL: ", Colors.red_to_purple, interval=0.0)
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36"
+    }
+    try:
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.content, 'html.parser')
+            folder_name = f"{url.replace('http://', '').replace('https://', '').replace('/', '_')}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+            os.makedirs(f"WebSite/{folder_name}", exist_ok=True)
+            with open(f"WebSite/{folder_name}/index.html", "w", encoding="utf-8") as file:
+                file.write(soup.prettify())
+            Write.Print(f"HTML SAVE! ➜ WebSite ➜ {folder_name}", Colors.red_to_purple, interval=0.0)
+        else:
+            Write.Print(f"Failed to retrieve data from the site. Consequence code: {response.status_code}", Colors.red, interval=0.0)
+    except Exception as e:
+        Write.Print(f"Error: {e}", Colors.red, interval=0.0)
+
+
+def measure_internet_speed():
+    try:
+        st = speedtest.Speedtest()
+        st.get_best_server()
+        download_speed = st.download() / 1_000_000  # Мбит/с
+        upload_speed = st.upload() / 1_000_000  # Мбит/с
+        Write.Print(f"Download speed: {download_speed:.2f} Mb/s", Colors.red_to_purple, interval=0.0)
+        Write.Print(f"Upload speed: {upload_speed:.2f} Mb/s", Colors.blue_to_purple, interval=0.0)
+    except Exception as e:
+        Write.Print(f"Error: {e}", Colors.red, interval=0.0)
+
+def scan_ports():
+    target = Write.Input("Enter IP or domain: ", Colors.red_to_purple, interval=0.0)
+    try:
+        socket.gethostbyname(target)  # Проверка доступности хоста
+        port_range = Write.Input("Enter a port range (for example, 20-80): ", Colors.red_to_purple, interval=0.0).split("-")
+        start_port, end_port = int(port_range[0]), int(port_range[1])
+        Write.Print(f"ScanerPort {start_port}-{end_port} - {target}...", Colors.red_to_purple, interval=0.0)
+        for port in range(start_port, end_port + 1):
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.settimeout(1)
+                result = sock.connect_ex((target, port))
+                if result == 0:
+                    Write.Print(f"Port {port} open.", Colors.red_to_purple, interval=0.0)
+    except Exception as e:
+        Write.Print(f"Error: {e}", Colors.red_to_purple, interval=0.0)
+
+# Основной код
+def main():
+  while True:
+    base_folder = "DataBase"  # Папка с базами данных
+    extension_filter = ['.xlsx', '.csv', '.txt', '.json']  # Фильтр по расширениям
+
+    # Получаем файлы из папки
+    all_files = get_files_from_folder(base_folder, extension_filter)
+    if not all_files:
+        Write.Print(f"[!] Нет файлов для поиска в папке '{base_folder}'", Colors.red, interval=0.0)
+        time.sleep(5)
+        return
+
+    # Разделение файлов на 3 группы для разных типов поиска
+    # Пусть базы данных 1 и 2 будут находиться в разных подкаталогах в папке DataBase
+    phone_number_files = get_files_from_folder(os.path.join(base_folder, "Phone"), extension_filter)
+    bank_files = get_files_from_folder(os.path.join(base_folder, "Банки"), extension_filter)
+    fio_files = get_files_from_folder(os.path.join(base_folder, "FIO"), extension_filter)
+    telegram_files = get_files_from_folder(os.path.join(base_folder, "Telegram"), extension_filter)
+    vk_files = get_files_from_folder(os.path.join(base_folder, "Вконтакте"), extension_filter)
+    discord_files = get_files_from_folder(os.path.join(base_folder, "Discord"), extension_filter)
+    auth_files = get_files_from_folder(os.path.join(base_folder, "Auth"), extension_filter)
+    jobs_files = get_files_from_folder(os.path.join(base_folder, "Jobs"), extension_filter)
+    emails_files = get_files_from_folder(os.path.join(base_folder, "Emails"), extension_filter)
+
+    phone = "1.PHONE"
+    bank = "2.BANK"
+    fio = "3.FIO"
+    telegram = "4.TELEGRAM"
+    vk = "5.VK"
+    discord = "6.DISCORD"
+    auth = "7.AUTH"
+    jobs = "8.JOBS"
+    email = "9.EMAIL"
+    full = "10.ALL"
+
+    menu1 = f"""
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣠⣴⡦⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⡴⠏⠄⣺⠃⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣰⡋⢚⠄⠊⣿⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣰⢏⣔⣤⢲⣋⣿⡀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⠏⠁⡔⠻⣿⢡⠼⢧⠀⠀⠀⠀
+⣾⣷⠶⣤⣀⠀⠀⠀⠀⠀⠀⠀⡜⠀⡰⠋⠀⣙⣀⣰⣽⡀⠀⠀⠀
+⠙⠻⣤⠐⢺⡗⠤⡀⠀⠀⠀⠀⠇⢀⢃⣴⡿⢋⠤⠾⠯⢽⣄⠀⠀
+⠀⠀⠀⠙⠢⢄⠀⠐⠴⣄⠀⠀⣰⣻⡿⢛⡉⠉⠀⠀⠐⠀⢿⡀⠀
+⠀⠀⠀⠀⠀⠀⠙⢴⠁⣠⣵⢶⣿⣾⢭⡭⠤⣀⠀⠄⢀⠁⠀⢧⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠁⠿⠁⠈⠫⠻⣷⣝⡢⢄⠀⠀⠀⠈⠱⣾⠁
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠙⢦⣄⠀⠈⠻⢿⣶⣤⣄⣀⣀⣴⠉⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠙⢦⡘⡄⠹⣦⠈⠉⠉⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠒⠢⠽⠀⠀⠀⠀⠀             ▄████████
+                                   ███    ███ 
+                                   ███    ███ 
+                                   ███    ███ 
+                                 ▀███████████ 
+                                   ███    ███ 
+                                   ███    ███ 
+                                   ███    █▀  
+
+╭───────────────────────────────────────────────────────────────────────────╮
+
+  ╵+╷ {phone}                      ╵+╷ {bank}                ╵+╷ {fio}
+
+  ╵+╷ {telegram}                   ╵+╷ {vk}                  ╵+╷ {discord}                 
+
+  ╵+╷ {auth}                       ╵+╷ {jobs}                ╵+╷ {email}
+                                
+                                   ╵+╷ {full}       
+
+╰───────────────────────────────────────────────────────────────────────────╯
+
+Choice: 
+"""
+    user_choice = Write.Input(Center.Center(f"""{menu1}"""), Colors.purple_to_red, interval=0.0) #Вывод баннера menu1 / меню на строке 105
+
+    if user_choice.strip() == '1': #Выбор функции
+        selected_files = phone_number_files
+        search_value = Write.Input("[>] ", Colors.red, interval=0.0)
+        load_and_search(selected_files, search_value)   
+    elif user_choice.strip() == '2': #Выбор функции
+        selected_files = bank_files
+        search_value = Write.Input("[>] ", Colors.red, interval=0.0)
+        load_and_search(selected_files, search_value)   
+    elif user_choice.strip() == '3': #Выбор функции
+        selected_files = fio_files
+        search_value = Write.Input("[>] ", Colors.red, interval=0.0)
+        load_and_search(selected_files, search_value)   
+    elif user_choice.strip() == '4': #Выбор функции
+        selected_files = telegram_files
+        search_value = Write.Input("[>] ", Colors.red, interval=0.0)
+        load_and_search(selected_files, search_value)   
+    elif user_choice.strip() == '5': #Выбор функции
+        selected_files = vk_files
+        search_value = Write.Input("[>] ", Colors.red, interval=0.0)
+        load_and_search(selected_files, search_value)   
+    elif user_choice.strip() == '6': #Выбор функции
+        selected_files = discord_files
+        search_value = Write.Input("[>] ", Colors.red, interval=0.0)
+        load_and_search(selected_files, search_value)   
+    elif user_choice.strip() == '7': #Выбор функции
+        selected_files = auth_files
+        search_value = Write.Input("[>] ", Colors.red, interval=0.0)
+        load_and_search(selected_files, search_value)   
+    elif user_choice.strip() == '8': #Выбор функции
+        selected_files = jobs_files
+        search_value = Write.Input("[>] ", Colors.red, interval=0.0)
+        load_and_search(selected_files, search_value)   
+    elif user_choice.strip() == '9': #Выбор функции
+        selected_files = emails_files   
+        search_value = Write.Input("[>] ", Colors.red, interval=0.0)
+        load_and_search(selected_files, search_value)    
+    elif user_choice.strip() == '10': #Выбор функции
+        selected_files = all_files    
+        search_value = Write.Input("[>] ", Colors.red, interval=0.0)
+        load_and_search(selected_files, search_value)
+    elif user_choice == "11":
+        check_ip()
+    elif user_choice == "12":
+        check_site_availability()
+    elif user_choice == "13":
+        parse_website()
+    elif user_choice == "14":
+        measure_internet_speed()
+    elif user_choice == "15":
+        scan_ports()
+    else:
+        Write.Print("[!] Неверный выбор. Завершение работы.", Colors.red, interval=0.0)
+        time.sleep(6)
+        return
+
+
+if __name__ == "__main__":
+    main()
+
+\n"""
+  }
+  
