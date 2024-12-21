@@ -41,6 +41,13 @@
             color: #ff4d4d;
         }
 
+        .navbar .brand {
+            font-size: 24px;
+            font-weight: bold;
+            color: #fff;
+            text-decoration: none;
+            cursor: pointer;
+        }
         /* Блок "О нас" с фоновым изображением и затемнением */
         .hero {
             position: relative;
@@ -184,15 +191,39 @@
             transform: scale(1.1);
             border-color: #ddd;
         }
+        /* Стили для снежинок */
+        @keyframes fall {
+            0% {
+                transform: translateY(-100%);
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(100vh);
+                opacity: 0;
+            }
+        }
+
+        .snowflake {
+            position: fixed;
+            top: -10px;
+            color: #fff;
+            font-size: 1em;
+            user-select: none;
+            z-index: 1000;
+            pointer-events: none;
+            animation: fall linear infinite;
+        }
+        
+        
     </style>
 </head>
 <body>
 
     <div class="navbar">
-        <div class="brand">Arkada</div>
+        <a class="brand" href="index.html">🎄 Arkada</a>
         <div class="menu">
             <a href="index.html">Главная</a>
-            <a href="t.me/arkadasoft">Продукты</a>
+            <a href="product.html">Продукты</a>
             <a href="wiki.html">Wiki</a>
         </div>
     </div>
@@ -203,7 +234,7 @@
             <h1>О нас</h1>
             <p>Мы предоставляем открытые коды наших программ, <br>чтобы все могли пользоваться продуктами Arkada.</p>
             <div class="buttons">
-                <a href="https://t.me/arkadasoft" class="btn-red">Скачать</a>
+                <a href="t.me/arkadasoft" class="btn-red">Скачать</a>
                 <a href="wiki.html" class="btn-transparent">Подробнее</a>
             </div>
         </div>
@@ -374,6 +405,8 @@
             height: 40px;
             margin-right: 15px;
         }
+
+        
         
     </style>
 
@@ -387,6 +420,29 @@
             });
         });
     </script>
+    <!-- Скрипт для снежинок -->
+    <script>
+        // Генерация снежинок
+        function createSnowflake() {
+            const snowflake = document.createElement('div');
+            snowflake.classList.add('snowflake');
+            snowflake.textContent = '❄'; // Используем снежинку
 
+            // Рандомный размер и позиция
+            snowflake.style.left = Math.random() * 100 + 'vw';
+            snowflake.style.animationDuration = Math.random() * 3 + 2 + 's'; // от 2 до 5 секунд
+            snowflake.style.fontSize = Math.random() * 20 + 10 + 'px'; // от 10px до 20px
+
+            document.body.appendChild(snowflake);
+
+            // Удаляем снежинку после анимации
+            setTimeout(() => {
+                snowflake.remove();
+            }, 5000);
+        }
+
+        // Создаём снежинки каждые 100 мс
+        setInterval(createSnowflake, 100);
+    </script>
 </body>
 </html>
